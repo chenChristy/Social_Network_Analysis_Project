@@ -1,0 +1,682 @@
+---
+title: "Social Network Analysis"
+date: "February 25, 2019"
+output: html_document
+---
+
+## Read data 
+```{r}
+attributes <- read.csv('Attributes.csv', header =TRUE)
+head(attributes)
+```
+```{r}
+collab <- read.csv('Collab.csv',header =TRUE)
+head(collab)
+```
+
+```{r}
+InfoSeek <- read.csv('InfoSeek.csv',header =TRUE)
+head(InfoSeek)
+```
+
+## Data Preparation
+Excude the Id column in two datasets.
+```{r}
+InfoSeek1 <- InfoSeek[,!(names(InfoSeek)%in%c('ID.Number'))]
+collab1 <- collab[,!(names(collab)%in%c('X'))]
+```
+
+Turn dataframe into a matrix
+```{r}
+InfoSeek1 <- as.matrix(InfoSeek1)
+collab1 <- as.matrix(collab1)
+```
+
+Change the diag value
+```{r}
+InfoSeek1 <- InfoSeek1 +diag(- diag(InfoSeek1)) 
+collab1 <- collab1 +diag(-diag(collab1))
+```
+
+Since value in the diagonal denotes the strength of the relationship between someone and himself, the intrinsic significance of which is meaningless. So we reset the diagonal as 0.
+
+The scale of the relationship strength ranges from 1-6, so the average is chosen for dichotimization our dataset to reduce the edges.
+```{r}
+infoseek.val=3
+collab.val=3
+```
+
+We now dichotomize the data based on the rule described above. A value of 1 signifies an edge and 0 implies the absence of an edge.
+
+```{r}
+infoseek3 = InfoSeek1 - infoseek.val
+infoseek3 <- ifelse(infoseek3 >0,1,0)
+
+collab3 = collab1 - collab.val
+collab3 <- ifelse(collab3 >0,1,0)
+
+```
+
+```{r}
+library(igraph)
+```
+
+##Create igraph object
+
+```{r}
+ginfo <- graph.adjacency(infoseek3,weighted = T,mode = 'directed')
+plot(ginfo,vertex.size=8)
+gcol <- graph.adjacency(collab3,weighted = T,mode = 'directed')
+
+```
+ 
+## More clear graphs in Gephi
+<p><img src="image14.png" alt="plot of chunk unnamed-chunk-1"> </p>
+
+
+## Attribute Dataset
+
+Create an index or a identification variable to make sure that we have the correct indices for assigning the attributes to the vertices
+```{r}
+attributes$ID.Number
+```
+
+```{r}
+V(ginfo)$name
+```
+
+```{r}
+id <- match(V(ginfo)$name,attributes$ID.Number)
+id
+```
+
+We begin to add attributes.
+```{r}
+V(ginfo)$department <- attributes$Department[id]
+V(ginfo)$management.level <- attributes$Management.level[id]
+V(ginfo)$tenure <- attributes$Tenure[id]
+V(ginfo)$gender <- attributes$Gender[id]
+V(ginfo)$individual <- attributes$Individual[id]
+V(ginfo)$group <- attributes$Group[id]
+V(ginfo)$organization <- attributes$Organization[id]
+
+V(gcol)$department <- attributes$Department[id]
+V(gcol)$management.level <- attributes$Management.level[id]
+V(gcol)$tenure <- attributes$Tenure[id]
+V(gcol)$gender <- attributes$Gender[id]
+V(gcol)$individual <- attributes$Individual[id]
+V(gcol)$group <- attributes$Group[id]
+V(gcol)$organization <- attributes$Organization[id]
+```
+
+
+## Centrality Metrics
+Closeness Centrality
+```{r}
+clo <- closeness(ginfo)
+clo[order(clo)]
+```
+
+```{r}
+clo <- closeness(gcol)
+clo[order(clo)]
+```
+
+Betweeness Centrality
+```{r}
+bet <- betweenness(ginfo)
+bet[order(bet)]
+```
+
+```{r}
+bet <- betweenness(gcol)
+bet[order(bet)]
+```
+
+Degree Centrality
+```{r}
+deg <- degree(ginfo, mode = "all")
+deg[order(deg)]
+```
+
+```{r}
+deg <- degree(ginfo, mode = "in")
+deg[order(deg)]
+```
+
+```{r}
+deg <- degree(ginfo, mode = "out")
+deg[order(deg)]
+```
+
+```{r}
+deg <- degree(gcol, mode = "all")
+deg[order(deg)]
+```
+
+```{r}
+deg <- degree(gcol, mode = "in")
+deg[order(deg)]
+```
+
+```{r}
+deg <- degree(gcol, mode = "out")
+deg[order(deg)]
+```
+
+Degree Centrality:
+A node is important if it has many neighbors.
+Closeness Centrality:
+Based on mean distance from one vertex to another. Higher values mean central of the whole network.
+Betweeness Centrality:
+Essentially measures the number of paths (that join other vertices) a vertex lies on.
+
+When we look into their centralities properties,  All of these nodes with high ranks tend to be info seeker and spreader, always collaborate with others or share work with other staffs in the whole corporate
+
+##Communities
+
+k-cores
+Function to layout  coreness
+```{r}
+CorenessLayout <- function(ginfo) {
+  coreness <- graph.coreness(ginfo);
+  xy <- array(NA, dim=c(length(coreness), 2));
+  
+  shells <- sort(unique(coreness));
+  for(shell in shells) {
+    v <- 1 - ((shell-1) / max(shells));
+    nodes_in_shell <- sum(coreness==shell);
+    angles <- seq(0,360,(360/nodes_in_shell));
+    angles <- angles[-length(angles)]; # remove last element
+    xy[coreness==shell, 1] <- sin(angles) * v;
+    xy[coreness==shell, 2] <- cos(angles) * v;
+  }
+  return(xy);
+}
+```
+
+
+Compute coreness
+```{r}
+coreness <- graph.coreness(ginfo)
+```
+
+Show coreness
+```{r}
+coreness
+coreness[order(coreness)]
+```
+
+Assign colors
+```{r}
+colbar <- rainbow(max(coreness))
+```
+
+
+Create layout
+```{r}
+ll <- CorenessLayout(ginfo)
+```
+
+
+Plot
+```{r}
+plot(ginfo, layout=ll, 
+     vertex.size=15, 
+     vertex.color=colbar[coreness], 
+     vertex.frame.color=colbar[coreness], 
+     main='Coreness')
+```
+
+<p><img src="image1.png" alt="plot of chunk unnamed-chunk-1"> </p>
+So there is no wonder those nodes with significant degree values and high closeness centrality and betweeness centrality distribute in the center of the whole network.
+
+
+
+##Cluster and Block Analysis
+```{r}
+library(ggdendro)
+library(sna)
+```
+
+equivatence
+```{r}
+inf <- network(infoseek3,directed=TRUE)
+coll <- network(collab3,directed=TRUE)
+
+# Obtain equivatent node objects
+# by creating an equiv.clust object
+eq <- equiv.clust(list(inf,coll), mode="digraph")
+
+# Plot the cluster dendrogram
+plot(eq)
+```
+<p><img src="image2.png" alt="plot of chunk unnamed-chunk-1"> </p>
+Initially, we create the cluster dendrogram, and set the block number 5, 
+
+
+Block Model for Infoseek
+```{r}
+b <- blockmodel(infoseek3, eq,k=5)
+
+# See the block vector and block membership
+V(gcol)[b$order.vector][64:99]
+```
+
+```{r}
+plot(b)
+```
+
+Obtain the overall network density
+```{r}
+den <- network.density(inf)
+
+# Prepare to obtain the image matrix
+bimage <- b$block.model
+bimage
+```
+
+Blocks with density less than overall network density are reduced to zero
+```{r}
+
+bimage[bimage < den] <- 0   
+bimage
+```
+
+```{r}
+bimage[is.nan(bimage)] <- 1
+bimage
+```
+Plots for infoseeking
+```{r}
+# View the plot
+gplot(bimage, diag=TRUE, 
+      edge.lwd=bimage, 
+      vertex.cex=sqrt(table(b$block.membership)),
+      gmode="digraph", vertex.sides=50, label=colnames(bimage),
+      vertex.col=gray(1-diag(bimage)/2))
+```
+
+Plots for collaboration
+```{r}
+b2 <- blockmodel(collab3, eq,k=5)
+
+# See the block vector and block membership
+b2$order.vector
+```
+
+```{r}
+
+b2$block.membership
+```
+
+
+```{r}
+# obtain the overall network density
+den2 <- network.density(coll)
+
+# Prepare to obtain the image matrix
+bimage2 <- b2$block.model
+bimage2
+```
+```{r}
+# Blocks with density less than overall network
+# density are reduced to zero
+bimage2[bimage2 < den2] <- 0   
+bimage2
+```
+
+```{r}
+bimage2[is.nan(bimage)] <- 1
+bimage2
+```
+
+```{r}
+# View the plot
+gplot(bimage2, diag=TRUE, displaylabels = TRUE,
+      edge.lwd=bimage2, 
+      label=colnames(bimage2),
+      vertex.cex=sqrt(table(b2$block.membership)),
+      gmode="digraph", vertex.sides=50,
+      vertex.col=gray(1-diag(bimage)/2))
+```
+
+In terms of the behaviors among each block, it’s evident that block 3 and block 5 are key players in such relationships and serve as the mediators in the whole corporate.
+
+If we sift out the key players and look into their centrality, there is no wonder they all rank highly in terms of three centrality measurement.
+<p><img src="image1.png" alt="plot of chunk unnamed-chunk-1"> </p>
+
+But also, there are a few interesting situations here, the node with the most significant centrality is D5136, but in fact D5 have 6 managers out of 22 staffs, which is the highest proportion among five departments, why only this one node populated in the central blocks. So as the D3R14, the only node in d3 populated in central blocks.
+
+And the second most significant node is D4R53, its management level is assumed to be the lowest, why this node has evidently greater strength in such relationships.
+
+## Reports based on Gephi
+### Overall Satisfaction Level
+<p><img src="image8.png" alt="plot of chunk unnamed-chunk-1"> </p>
+<p><img src="image9.png" alt="plot of chunk unnamed-chunk-1"> </p>
+
+### Attributes of some nodes
+Node Size: Tenure
+Label Size: Degree
+Node Color: Department
+Label Color: Management Level
+
+
+D5R136
+<p><img src="image3.png" alt="plot of chunk unnamed-chunk-1"> </p>
+Long tenure
+High management level 
+Connection with other departments
+High indegree and outdegree values
+Dominant position in D5
+
+D3R14
+<p><img src="image4.png" alt="plot of chunk unnamed-chunk-1"> </p>
+Short tenure
+Connection with other departments
+No dominant managers in D3
+Serve as the intermediary among D3 and 
+other departments
+
+D4R53
+<p><img src="image5.png" alt="plot of chunk unnamed-chunk-1"> </p>
+Shortest tenure
+Management level 2
+Highly connected with 20 managers out of 26
+Significant relationships with D3, 
+whose overall degree values are low
+
+### Management overall Satisfaction
+<p><img src="image6.png" alt="plot of chunk unnamed-chunk-1"> </p>
+Nodes with a smaller degree are of  lower satisfaction
+A high proportion of managers in D3 and D5 are unsatisfied with group and organization productivity
+High satisfaction of individual productivity
+
+That’s may due to their low engagement in the relationships or dominated by one of the other managers in their department
+
+### Block Model of Other Communities
+<p><img src="image7.png" alt="plot of chunk unnamed-chunk-1"> </p>
+When we go back to the block model, there is not much relationship between 1,2,4, it’s for the reason that the dominant clique in each block is of different department.
+
+
+## Statistical analysis
+
+Define function to describe adjacency matrix
+```{r}
+netDesc <- function(adjMat) {
+  if (dim(adjMat)[1] == dim(adjMat)[2]) {
+    n <- dim(adjMat)[1]
+    numx <- n*(n-1)/2
+    minx <- min(adjMat)
+    maxx <- max(adjMat)
+    sumx <- sum(adjMat)
+    meanx <- mean(adjMat)
+    stdx <- sd(adjMat)
+    varx <- stdx * stdx
+    enrmx <- sqrt(sum(adjMat^2))
+    colsumx <- colSums(adjMat)
+    rowsumx <- rowSums(adjMat)
+    rowsdx <- apply(adjMat, 1, sd)
+    colsdx <- apply(adjMat, 2, sd)
+    return(list(n=n,min=minx,max=maxx,
+                sum=sumx,std=stdx,var=varx,
+                eucnorm=enrmx,
+                rowsum=rowsumx,rowsd=rowsdx,
+                colsum=colsumx,colsd=colsdx))
+  }
+  else 
+    return("Not a square matrix")
+}
+```
+
+Apply the function to matrices
+```{r}
+netDesc(infoseek3)
+netDesc(collab3)
+```
+
+#### Set up QAP
+```{r}
+library(network)
+library(igraph)
+library(NetData)
+library(sna)
+library(intergraph)
+```
+
+```{r}
+infoseek <- asNetwork(ginfo)
+collabor <- asNetwork(gcol)
+```
+
+#### Set up QAP
+```{r}
+library(network)
+library(igraph)
+library(NetData)
+library(sna)
+library(intergraph)
+```
+
+```{r}
+infoseek <- asNetwork(ginfo)
+collabor <- asNetwork(gcol)
+```
+
+Fit a netlogit model
+```{r}
+nl<-netlogit(infoseek,collabor,reps=100)
+summary(nl)
+```
+
+```{r}
+nl22<-netlogit(collabor,infoseek,reps=100)
+summary(nl22)
+```
+
+
+
+#### Regression
+Fit a netlm model
+```{r}
+nl1 <- netlm(infoseek,list(collabor),reps=100)
+summary(nl1)
+```
+The descriptive statistics and measure of goodness of fit are standard multiple regression results – except, of course, that we are looking at predicting relations between actors, not the attributes of actors.
+
+The model R-square (0.6123) indicates that knowing two individuals are in collaboration relationship reduces uncertainty in predicting an information seeking relationship by 61.23%. The significance level (by the QAP method) is 0. In this case, we would conclude that we can be quite sure that the observed result is non-random.
+
+Since the dependent matrix in this example is binary, the regression equation is interpretable as a linear probability model. Since the p-value associated with x1(whether there is a collaboration relationship) is less than 0.05. We can reasonably sure to conclude that if two individuals are in collaboration relationship, the probability that there is an information seeking relationship increases by 0.8485.
+
+Fit a netlm model
+```{r}
+nl2 <- netlm(collabor,list(infoseek),reps=100)
+summary(nl2)
+```
+
+The model R-square (0.6123) indicates that knowing two individuals are in information seeking relationship reduces uncertainty in predicting a collaboration relationship by 61.23%. The significance level (by the QAP method) is 0. In this case, we would conclude that we can be quite sure that the observed result is non-random.
+
+Since the p-value associated with x1(whether there is an information seeking relationship) is less than 0.05. We can reasonably sure to conclude that if two individuals are in information seeking relationship, the probability that there is a collaboration relationship increases by 0.7217.
+
+### ERGM
+```{r}
+library(statnet)
+library(network)
+library(igraph)
+library(NetData)
+library(sna)
+library(intergraph)
+```
+
+
+Forecast for infoseek relationship
+
+```{r}
+# Null model
+m1 = ergm(infoseek ~ edges)
+summary(m1)
+```
+
+```{r}
+# log-odds
+cat('From the null model, we find that log-odds of any tie in m1 =',m1$coef,  '\n')
+# probability
+Probability = exp(m1$coef)/(1+exp(m1$coef))
+
+cat('The probability that corresponds to the log-odds is',Probability)
+```
+
+
+
+```{r}
+m1.1 = ergm(infoseek ~ edges+nodefactor('tenure'))
+summary(m1.1)
+```
+
+```{r}
+m1.2 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level'))
+summary(m1.2)
+```
+
+```{r}
+m1.3 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department', diff=T))
+summary(m1.3)
+```
+
+```{r}
+m1.4 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department', diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T))
+summary(m1.4)
+```
+
+```{r}
+m1.5 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('group'))
+summary(m1.5)
+```
+
+```{r}
+m1.6 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('group')+nodecov('individual'))
+summary(m1.6)
+```
+
+```{r}
+m1.7 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('individual')+nodecov('organization'))
+summary(m1.7)
+```
+
+We notice that the AIC for the model is 5476, which is less than the null model with AIC 6502
+From the above results, we can find that length of tenure, management level(especially level 2), which department the employee is, whether employee is gender2(male?), individual and organization satisfaction level are statistically significant for info seeking relashionship.
+
+
+```{r}
+m1.9 = ergm(infoseek ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('organization'))
+summary(m1.9)
+```
+
+Forecast for collabor relationship
+```{r}
+collabor
+```
+
+```{r}
+# Null model
+m2 = ergm(collabor ~ edges)
+summary(m2)
+```
+
+```{r}
+# log-odds
+cat('From the null model, we find that log-odds of any tie in m2 =',m2$coef,  '\n')
+# probability
+Probability2 = exp(m2$coef)/(1+exp(m2$coef))
+cat('The probability that corresponds to the log-odds is',Probability2)
+```
+
+```{r}
+m2.1 = ergm(collabor ~ edges+nodefactor('tenure'))
+summary(m2.1)
+```
+
+```{r}
+m2.2 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level'))
+summary(m2.2)
+```
+
+```{r}
+m2.3 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department', diff=T))
+summary(m2.3)
+```
+
+```{r}
+m2.4 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department', diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T))
+summary(m2.4)
+```
+
+```{r}
+m2.5 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('group'))
+summary(m2.5)
+```
+
+```{r}
+m2.6 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('group')+nodecov('individual'))
+summary(m2.6)
+```
+
+
+```{r}
+m2.9 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('organization'))
+summary(m2.9)
+```
+
+
+```{r}
+m2.7 = ergm(collabor ~ edges+nodefactor('tenure')+nodefactor('management.level')
+            +nodematch('department',diff=T,keep=c(2,3,4,5))+nodematch('gender', diff=T, keep=2)
+            +nodecov('group')+nodecov('organization'))
+summary(m2.7)
+```
+We notice that the AIC for the model is 5047, which is less than the null model with AIC 5771.
+From the above results, we can find that length of tenure, management level, which department the employee is and whether employee is gender2(male?) are statistically significant for collaboration relashionship.
+
+```{r}
+m2.gof.model <- gof(m2.7 ~ model)
+m2.gof.model
+```
+
+```{r}
+plot(m2.gof.model)
+```
+
+Interesting Findings:
+
+1.	Individual Satisfaction Level has a positive effect on the number of ties in info-seeking relationship.
+The purposive seeking for information as a consequence of a need to satisfy some goal. By obtaining information from other employees or reporting results, the individual's need can be satisfied. Therefore, the higher the employee with individual satisfaction level, the easier it is to establish an information seeking relationship with others.
+
+2.	Group Satisfaction Level has a positive effect on the number of ties in collaboration relationship. It is not difficult to understand that an employee with a higher group satisfaction level will be more willing to participate in group work and increase the chances and times of team cooperation with other employees, so the ties of the collaboration relationship will increase. 
+3.	Organization Satisfaction Level has a negative effect on the number of ties in info-seeking and collaboration relationship.
+For those who are highly satisfied with the organization, there may be fewer links between info-seeking and collaboration relationships. This is indeed beyond our expectation at first.
+When we only use organization satisfaction level as independent variable in two models, we find that its effect is very low. 
+We assume that satisfaction with organizational vision is associated with overall job satisfaction and perceived effort. The more employees are satisfied with the overall environment and results, the less adjusting he will have to do. Therefore, people with high organizational satisfaction level will have fewer number of collaborations and seeking information ties.
+
+
+
+
+
+
